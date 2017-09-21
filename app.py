@@ -34,3 +34,6 @@ def start():
                 logging.error('Error shutting down')
                 os._exit(0) # pylint: disable=W0212
     conn.close()
+
+if __name__ == '__main__':
+    start()
