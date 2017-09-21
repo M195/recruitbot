@@ -1,21 +1,31 @@
 '''Module to deal with new clients'''
-import socket
 import csv
 import os
+import logging
 from threading import Thread
 from datetime import datetime
 
 class Client(Thread):
     '''A class that handles new client connections, handling them on a new thread'''
+    __id = 0
 
     def __init__(self, sock, addr):
+        logging.info('New client connected (%s:%s) with id %s', addr[0], addr[1], Client.__id)
+        logging.debug('Creating new thread')
+
         Thread.__init__(self)
+        logging.debug('Thread created')
+
+        self.__id = Client.__id
+        Client.__id += 1
+
         self.sock = sock
         self.addr = addr
         self.data = {}
         self.buffer_size = 1024
 
         self.start()
+        logging.debug('Thread started')
 
     def run(self):
         try:
@@ -30,14 +40,18 @@ class Client(Thread):
 
             self.send_message('Thank you!\n\n', )
             self.save_data()
-        except Exception: # pylint: disable=W0703
+        except Exception as error: # pylint: disable=W0703
             self.send_message('Sorry, an error occurred')
+            logging.error(error)
 
-        self.sock.shutdown(socket.SHUT_RDWR)
+        self.sock.close()
+        logging.debug('Closed client#%s', self.__id)
 
     def get_input(self):
         '''Get data from the socket, decoding it and stripping whitespace'''
-        return self.sock.recv(self.buffer_size).decode().strip()
+        user_input = self.sock.recv(self.buffer_size).decode().strip()
+        logging.debug('Message `%s` received from client#%s', user_input, self.__id)
+        return user_input
 
     def get_all_data(self, questions):
         '''Batch call self.get_input for each question in the list'''
@@ -48,7 +62,7 @@ class Client(Thread):
         '''Get data by asking a question and adding the result to self.data'''
         self.send_message(msg)
         user_input = self.get_input()
-        while required == True and user_input == '':
+        while required and user_input == '':
             self.send_message('This question is required')
             user_input = self.get_input()
 
@@ -66,6 +80,7 @@ class Client(Thread):
     def send_message(self, msg):
         '''Send an encoded message through the socket'''
         self.sock.send(bytearray(msg + '\n', 'ascii'))
+        logging.debug('Sent message `%s` to client#%s', msg, self.__id)
 
     def save_data(self, filename='interviews.csv'):
         '''Save self.data into a csv file'''
@@ -79,3 +94,4 @@ class Client(Thread):
             if not file_exists:
                 writer.writeheader()
             writer.writerow(self.data)
+            logging.debug('Data from client#%s saved to %s', self.__id, filename)
